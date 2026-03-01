@@ -15,7 +15,7 @@ class Agent:
         ], dtype=np.float32)
 
     # ====================================================
-    # ACT (DEPTH 2 FIJO)
+    # ACT 
     # ====================================================
     def act(self, board: np.ndarray, legal_actions: List[str]) -> str:
 
@@ -39,7 +39,7 @@ class Agent:
         return best_action
 
     # ====================================================
-    # EXPECTIMAX DEPTH 2
+    # EXPECTIMAX
     # ====================================================
     def expectimax(self, board, depth, player_turn):
 
@@ -137,7 +137,7 @@ class Agent:
         return board_copy, reward, moved_any
 
     # ====================================================
-    # HEURÍSTICA FUERTE
+    # HEURISTICA
     # ====================================================
     def evaluate(self, board):
 
@@ -172,3 +172,4 @@ class Agent:
             + mono
             + merge_potential * 50
         )
+
