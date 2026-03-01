@@ -4,13 +4,9 @@ import numpy as np
 
 
 class Agent:
-
-    def __init__(self, seed: Optional[int] = None, depth: int = 3):
-        self.depth = depth
+    def __init__(self, seed: Optional[int] = None):
         self.rng = np.random.default_rng(seed)
-        self.cache = {}
 
-        # Snake pattern weights
         self.base_weights = np.array([
             [15, 14, 13, 12],
             [ 8,  9, 10, 11],
@@ -19,14 +15,12 @@ class Agent:
         ], dtype=np.float32)
 
     # ====================================================
-    # MÉTODO PRINCIPAL
+    # ACT (DEPTH 2 FIJO)
     # ====================================================
     def act(self, board: np.ndarray, legal_actions: List[str]) -> str:
 
         if not legal_actions:
             return "up"
-
-        self.cache.clear()
 
         best_score = -float("inf")
         best_action = legal_actions[0]
@@ -36,7 +30,7 @@ class Agent:
             if not moved:
                 continue
 
-            score = reward + self.expectimax(new_board, self.depth - 1, False)
+            score = reward + self.expectimax(new_board, 1, False)
 
             if score > best_score:
                 best_score = score
@@ -45,58 +39,55 @@ class Agent:
         return best_action
 
     # ====================================================
-    # EXPECTIMAX
+    # EXPECTIMAX DEPTH 2
     # ====================================================
     def expectimax(self, board, depth, player_turn):
 
-        key = (tuple(board.flatten()), depth, player_turn)
-        if key in self.cache:
-            return self.cache[key]
-
         if depth == 0:
-            val = self.evaluate(board)
-            self.cache[key] = val
-            return val
+            return self.evaluate(board)
 
         if player_turn:
             best = -float("inf")
+
             for action in ["up", "down", "left", "right"]:
                 new_board, reward, moved = self.simulate_move(board, action)
                 if not moved:
                     continue
 
-                val = reward + self.expectimax(new_board, depth - 1, False)
+                val = reward + self.evaluate(new_board)
                 best = max(best, val)
 
-            if best == -float("inf"):
-                best = self.evaluate(board)
-
-            self.cache[key] = best
-            return best
+            return best if best != -float("inf") else self.evaluate(board)
 
         else:
             empties = list(zip(*np.where(board == 0)))
+
             if not empties:
-                val = self.evaluate(board)
-                self.cache[key] = val
-                return val
+                return self.evaluate(board)
+
+            # limitar branching fuerte
+            if len(empties) > 3:
+                empties = empties[:3]
 
             total = 0.0
 
             for r, c in empties:
-                for value, prob in [(2, 0.9), (4, 0.1)]:
-                    new_board = board.copy()
-                    new_board[r, c] = value
-                    total += prob * self.expectimax(new_board, depth - 1, True)
 
-            val = total / len(empties)
-            self.cache[key] = val
-            return val
+                new_board = board.copy()
+                new_board[r, c] = 2
+                total += 0.9 * self.evaluate(new_board)
+
+                new_board = board.copy()
+                new_board[r, c] = 4
+                total += 0.1 * self.evaluate(new_board)
+
+            return total / len(empties)
 
     # ====================================================
-    # SIMULADOR DE MOVIMIENTO
+    # SIMULADOR
     # ====================================================
     def simulate_move(self, board, action):
+
         board_copy = board.copy()
         size = board.shape[0]
         reward = 0
@@ -146,31 +137,27 @@ class Agent:
         return board_copy, reward, moved_any
 
     # ====================================================
-    # FUNCIÓN DE EVALUACIÓN OPTIMIZADA
+    # HEURÍSTICA FUERTE
     # ====================================================
     def evaluate(self, board):
 
         empty = np.sum(board == 0)
 
-        # log2 seguro (sin warning)
         log_board = np.zeros_like(board, dtype=np.float32)
         mask = board > 0
         log_board[mask] = np.log2(board[mask])
 
-        # Snake pattern (evaluamos las 4 rotaciones)
         snake_score = 0.0
         for k in range(4):
             rotated = np.rot90(log_board, k)
             weights = np.rot90(self.base_weights, k)
             snake_score = max(snake_score, np.sum(rotated * weights))
 
-        # Monotonicidad
         mono = 0.0
         for i in range(4):
             mono -= np.sum(np.abs(log_board[i, :-1] - log_board[i, 1:]))
             mono -= np.sum(np.abs(log_board[:-1, i] - log_board[1:, i]))
 
-        # Potencial de merges
         merge_potential = 0.0
         for i in range(4):
             for j in range(3):
@@ -179,17 +166,9 @@ class Agent:
                 if board[j, i] == board[j+1, i] and board[j, i] != 0:
                     merge_potential += np.log2(board[j, i])
 
-        # Corner bonus
-        max_tile = board.max()
-        corner_bonus = 0.0
-        corners = [board[0,0], board[0,-1], board[-1,0], board[-1,-1]]
-        if max_tile in corners and max_tile > 0:
-            corner_bonus = np.log2(max_tile) * 40
-
         return (
-            snake_score * 12
-            + empty * 250
-            + mono * 1.2
-            + merge_potential * 80
-            + corner_bonus
+            snake_score * 10
+            + empty * 200
+            + mono
+            + merge_potential * 50
         )
